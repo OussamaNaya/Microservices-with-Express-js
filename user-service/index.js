@@ -14,13 +14,22 @@ const kafka = new Kafka({
 });
 
 const producer = kafka.producer();
+const admin = kafka.admin();
 
 const initKafka = async () => {
     try {
+        // 🛠️ Créer le topic explicitement s'il n'existe pas
+        await admin.connect();
+        await admin.createTopics({
+            topics: [{ topic: 'user-created', numPartitions: 1 }],
+        });
+        await admin.disconnect();
+        console.log('✅ Kafka Topic "user-created" vérifié/créé');
+
         await producer.connect();
         console.log('✅ Kafka Producer connecté');
     } catch (error) {
-        console.error('❌ Erreur de connexion Kafka Producer:', error.message);
+        console.error('❌ Erreur Kafka Producer/Admin:', error.message);
     }
 };
 

@@ -247,36 +247,54 @@ Les services peuvent aussi être testés directement :
 
 ---
 
-## 🏗️ Schéma d'architecture
+## 🏗️ Architecture Événementielle (Event-Driven)
 
-```
-            ┌─────────────────────────────────┐
-            │         Client / Postman         │
-            └────────────┬────────────────────┘
-                         │  port 3000
-                         ▼
-            ┌─────────────────────────────────┐
-            │          api-gateway            │
-            │       (Express + Axios)          │
-            └────────┬───────────┬────────────┘
-                     │           │
-          port 3001  │           │  port 3002
-                     ▼           ▼
-          ┌──────────────┐  ┌──────────────────┐
-          │ user-service │  │ product-service  │
-          │  (Express)   │  │   (Express)      │
-          └──────────────┘  └──────────────────┘
+```mermaid
+graph LR
+    Client(["🖥️ Client\nPostman / Browser"])
+    GW["🚪 api-gateway\nlocalhost:3000"]
+    US["👤 user-service\nlocalhost:3001"]
+    OS["🛒 order-service\nlocalhost:3003"]
+    K["🛡️ Kafka Broker\nlocalhost:9092"]
+
+    Client --> GW
+    GW -->|POST /users| US
+    US --"(1) Publie 'user-created'"--> K
+    K --"(2) Envoie à"--> OS
+    OS --"(3) Stocke en local"--> Cache[(Users Cache)]
+    GW -->|GET /orders| OS
+    OS --"(4) Lit son cache"--> Cache
 ```
 
 ---
 
-## 🧰 Technologies utilisées
+## 🚀 Prérequis : Kafka
 
-| Outil | Rôle |
-|---|---|
-| Node.js | Runtime JavaScript |
-| Express.js | Framework HTTP |
-| Axios | Requêtes HTTP entre services |
+Pour faire tourner le projet, vous devez avoir un broker Kafka actif sur le port **9092**.
+
+**Lancer Kafka avec Docker (recommandé) :**
+```bash
+docker run -p 9092:9092 apache/kafka
+```
+
+---
+
+## 🧰 Stack technique
+
+| Technologie | Rôle |
+|-------------|------|
+| **Node.js** | Runtime JavaScript |
+| **Express.js** | Framework HTTP |
+| **KafkaJS** | Client Kafka pour synchronisation asynchrone |
+| **Axios** | Communication HTTP (Gateway vers services) |
+
+---
+
+## 📝 Notes sur le flux Kafka
+
+1.  **user-service** (Producer) : Publie un événement `user-created` lors de chaque création.
+2.  **order-service** (Consumer) : Écoute les événements et maintient son **cache local**.
+3.  **Découplage** : Les services sont totalement indépendants grâce à Kafka.
 
 > Aucune base de données requise.  
-> Les données sont stockées **en mémoire** et synchronisées asynchronement via **Kafka**.
+> Les données sont stockées **en mémoire** et synchronisées via **Kafka**.

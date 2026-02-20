@@ -22,22 +22,29 @@ let users = [
 const initKafka = async () => {
     try {
         await consumer.connect();
+
+        // On s'abonne au topic (si user-service ne l'a pas encore créé, Kafka peut râler au début)
         await consumer.subscribe({ topic: 'user-created', fromBeginning: true });
 
         await consumer.run({
             eachMessage: async ({ topic, partition, message }) => {
-                const newUser = JSON.parse(message.value.toString());
-                console.log(`📥 Kafka: Nouvel utilisateur reçu : ${newUser.name}`);
+                try {
+                    const newUser = JSON.parse(message.value.toString());
+                    console.log(`📥 Kafka: Nouvel utilisateur reçu : ${newUser.name}`);
 
-                // Mettre à jour le cache local s'il n'existe pas déjà
-                if (!users.find(u => u.id === newUser.id)) {
-                    users.push(newUser);
+                    if (!users.find(u => u.id === newUser.id)) {
+                        users.push(newUser);
+                    }
+                } catch (e) {
+                    console.error('❌ Erreur parsing Kafka:', e.message);
                 }
             },
         });
         console.log('✅ Kafka Consumer connecté et écoute le topic "user-created"');
     } catch (error) {
         console.error('❌ Erreur Kafka Consumer:', error.message);
+        console.log('🔄 Tentative de reconnexion dans 5 secondes...');
+        setTimeout(initKafka, 5000); // Réessayer dans 5 secondes
     }
 };
 
