@@ -1,0 +1,111 @@
+// ============================================================
+// API GATEWAY – Port 3000
+// Point d'entrée unique : redirige les requêtes vers les bons services
+//
+//   /api/v1/users    →  user-service    (http://localhost:3001)
+//   /api/products →  product-service (http://localhost:3002)
+// ============================================================
+
+const express = require('express');
+const axios = require('axios');
+
+const app = express();
+
+// Middleware pour lire le JSON dans les requêtes POST
+app.use(express.json());
+
+// ---- URLs des microservices ----
+const USER_SERVICE_URL = 'http://localhost:3001';
+const PRODUCT_SERVICE_URL = 'http://localhost:3002';
+
+// ============================================================
+// ROUTES – USERS  (proxy vers user-service)
+// ============================================================
+
+// GET /api/v1/users → récupère tous les utilisateurs
+app.get('/api/v1/users', async (req, res) => {
+    try {
+        const response = await axios.get(`${USER_SERVICE_URL}/users`);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le user-service.',
+            detail: error.message,
+        });
+    }
+});
+
+// POST /api/v1/users → crée un utilisateur
+// Body attendu : { "name": "...", "email": "..." }
+app.post('/api/v1/users', async (req, res) => {
+    try {
+        const response = await axios.post(`${USER_SERVICE_URL}/users`, req.body);
+        res.status(201).json(response.data);
+    } catch (error) {
+        // Si le service retourne une erreur de validation, on la propage
+        if (error.response) {
+            return res.status(error.response.status).json(error.response.data);
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le user-service.',
+            detail: error.message,
+        });
+    }
+});
+
+// ============================================================
+// ROUTES – PRODUCTS  (proxy vers product-service)
+// ============================================================
+
+// GET /api/products → récupère tous les produits
+app.get('/api/v1/products', async (req, res) => {
+    try {
+        const response = await axios.get(`${PRODUCT_SERVICE_URL}/products`);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le product-service.',
+            detail: error.message,
+        });
+    }
+});
+
+// POST /api/v1/products → crée un produit
+// Body attendu : { "name": "...", "price": 99 }
+app.post('/api/v1/products', async (req, res) => {
+    try {
+        const response = await axios.post(`${PRODUCT_SERVICE_URL}/products`, req.body);
+        res.status(201).json(response.data);
+    } catch (error) {
+        if (error.response) {
+            return res.status(error.response.status).json(error.response.data);
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le product-service.',
+            detail: error.message,
+        });
+    }
+});
+
+// ---- Route racine : vérification rapide de l'état de la gateway ----
+app.get('/', (req, res) => {
+    res.json({
+        message: '🚪 API Gateway opérationnelle',
+        routes: {
+            users: ['GET /api/v1/users', 'POST /api/v1/users'],
+            products: ['GET /api/v1/products', 'POST /api/v1/products'],
+        },
+    });
+});
+
+// ---- Démarrage du serveur ----
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`✅ api-gateway démarré sur http://localhost:${PORT}`);
+    console.log(`   → /api/v1/users    proxie vers ${USER_SERVICE_URL}`);
+    console.log(`   → /api/v1/products proxie vers ${PRODUCT_SERVICE_URL}`);
+});

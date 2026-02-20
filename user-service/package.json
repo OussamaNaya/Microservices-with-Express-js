@@ -1,0 +1,12 @@
+{
+    "name": "user-service",
+    "version": "1.0.0",
+    "description": "Microservice gérant les utilisateurs (port 3001)",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2"
+    }
+}
