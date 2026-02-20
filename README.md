@@ -278,5 +278,5 @@ Les services peuvent aussi être testés directement :
 | Express.js | Framework HTTP |
 | Axios | Requêtes HTTP entre services |
 
-> Aucune base de données, aucun Docker requis.  
-> Les données sont stockées **en mémoire** (reset au redémarrage).
+> Aucune base de données requise.  
+> Les données sont stockées **en mémoire** et synchronisées asynchronement via **Kafka**.

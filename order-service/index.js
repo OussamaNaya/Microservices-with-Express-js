@@ -1,22 +1,49 @@
-// ============================================================
-// ORDER SERVICE – Port 3003
-// Gère les commandes et COMMUNIQUE avec user-service (3001)
-// pour récupérer les informations de l'utilisateur concerné.
-//
-// Exemple de communication inter-services :
-//   GET /orders/:id  →  appelle user-service pour enrichir la réponse
-// ============================================================
-
 const express = require('express');
-const axios = require('axios');
-
+const { Kafka } = require('kafkajs');
 const app = express();
 app.use(express.json());
 
-// ---- URL du service dépendant ----
-const USER_SERVICE_URL = 'http://localhost:3001';
+// ============================================================
+// CONFIGURATION KAFKA (Consumer)
+// ============================================================
+const kafka = new Kafka({
+    clientId: 'order-service',
+    brokers: ['localhost:9092'],
+});
 
-// ---- Base de données simulée en mémoire ----
+const consumer = kafka.consumer({ groupId: 'order-group' });
+
+// ---- Cache local des utilisateurs (alimenté par Kafka) ----
+let users = [
+    { id: 1, name: 'Alice Dupont', email: 'alice@mail.com' },
+    { id: 2, name: 'Bob Martin', email: 'bob@mail.com' },
+];
+
+const initKafka = async () => {
+    try {
+        await consumer.connect();
+        await consumer.subscribe({ topic: 'user-created', fromBeginning: true });
+
+        await consumer.run({
+            eachMessage: async ({ topic, partition, message }) => {
+                const newUser = JSON.parse(message.value.toString());
+                console.log(`📥 Kafka: Nouvel utilisateur reçu : ${newUser.name}`);
+
+                // Mettre à jour le cache local s'il n'existe pas déjà
+                if (!users.find(u => u.id === newUser.id)) {
+                    users.push(newUser);
+                }
+            },
+        });
+        console.log('✅ Kafka Consumer connecté et écoute le topic "user-created"');
+    } catch (error) {
+        console.error('❌ Erreur Kafka Consumer:', error.message);
+    }
+};
+
+initKafka();
+
+// ---- Base de données simulée en mémoire pour les commandes ----
 const orders = [
     { id: 101, userId: 1, product: 'Laptop', quantity: 1, price: 1200 },
     { id: 102, userId: 2, product: 'Phone', quantity: 2, price: 599 },
@@ -24,7 +51,7 @@ const orders = [
 ];
 
 // ============================================================
-// GET /orders → retourne toutes les commandes (sans détail user)
+// GET /orders → retourne toutes les commandes
 // ============================================================
 app.get('/orders', (req, res) => {
     res.status(200).json({
@@ -37,12 +64,11 @@ app.get('/orders', (req, res) => {
 // ============================================================
 // GET /orders/:id → retourne UNE commande + infos de l'utilisateur
 //
-// 🔑 C'est ici que la communication inter-services a lieu :
-//    order-service appelle user-service via HTTP (axios)
-//    pour récupérer le nom et l'email de l'utilisateur.
+// 🚀 ARCHITECTURE ÉVÉNEMENTIELLE :
+//    On n'utilise plus Axios ! On regarde dans notre CACHE LOCAL 'users'
+//    qui est maintenu à jour par Kafka.
 // ============================================================
-app.get('/orders/:id', async (req, res) => {
-    // Étape 1 : chercher la commande localement
+app.get('/orders/:id', (req, res) => {
     const order = orders.find(o => o.id == req.params.id);
 
     if (!order) {
@@ -52,42 +78,29 @@ app.get('/orders/:id', async (req, res) => {
         });
     }
 
-    try {
-        // Étape 2 : appel HTTP vers user-service pour récupérer l'utilisateur
-        // → communication inter-services avec axios
-        const userResponse = await axios.get(`${USER_SERVICE_URL}/users/${order.userId}`);
-        const user = userResponse.data;
+    // On cherche l'utilisateur dans le cache local (plus d'appel HTTP !)
+    const user = users.find(u => u.id === order.userId);
 
-        // Étape 3 : combiner commande + utilisateur et renvoyer
-        res.status(200).json({
-            success: true,
-            data: {
-                orderId: order.id,
-                product: order.product,
-                quantity: order.quantity,
-                price: order.price,
-                user: {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                },
-            },
-        });
-    } catch (error) {
-        // Si user-service est down ou l'utilisateur n'existe pas
-        res.status(502).json({
-            success: false,
-            message: 'Impossible de contacter user-service.',
-            detail: error.message,
-        });
-    }
+    res.status(200).json({
+        success: true,
+        data: {
+            orderId: order.id,
+            product: order.product,
+            quantity: order.quantity,
+            price: order.price,
+            user: user ? {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+            } : 'Utilisateur inconnu (en attente de synchronisation Kafka)',
+        },
+    });
 });
 
 // ============================================================
 // POST /orders → ajoute une commande
-// Body attendu : { "userId": 1, "product": "...", "quantity": 1, "price": 99 }
 // ============================================================
-app.post('/orders', async (req, res) => {
+app.post('/orders', (req, res) => {
     const { userId, product, quantity, price } = req.body;
 
     if (!userId || !product || !quantity || !price) {
@@ -97,13 +110,12 @@ app.post('/orders', async (req, res) => {
         });
     }
 
-    // Vérifier que l'utilisateur existe avant de créer la commande
-    try {
-        await axios.get(`${USER_SERVICE_URL}/users/${userId}`);
-    } catch {
+    // Vérifier l'utilisateur dans le cache local
+    const userExists = users.find(u => u.id == userId);
+    if (!userExists) {
         return res.status(404).json({
             success: false,
-            message: `Utilisateur #${userId} introuvable. Commande annulée.`,
+            message: `Utilisateur #${userId} introuvable dans le cache local. Commande impossible.`,
         });
     }
 
@@ -119,7 +131,7 @@ app.post('/orders', async (req, res) => {
 
     res.status(201).json({
         success: true,
-        message: 'Commande créée avec succès.',
+        message: 'Commande créée avec succès (via cache local Kafka).',
         data: newOrder,
     });
 });
@@ -128,5 +140,5 @@ app.post('/orders', async (req, res) => {
 const PORT = 3003;
 app.listen(PORT, () => {
     console.log(`✅ order-service démarré sur http://localhost:${PORT}`);
-    console.log(`   → communique avec user-service sur ${USER_SERVICE_URL}`);
+    console.log(`   → utilise Kafka pour synchroniser les utilisateurs`);
 });

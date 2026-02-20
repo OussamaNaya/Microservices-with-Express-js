@@ -1,13 +1,30 @@
-// ============================================================
-// USER SERVICE – Port 3001
-// Gère les utilisateurs (stockage en mémoire, pas de base de données)
-// ============================================================
-
 const express = require('express');
+const { Kafka } = require('kafkajs');
 const app = express();
 
 // Middleware pour lire le JSON dans les requêtes POST
 app.use(express.json());
+
+// ============================================================
+// CONFIGURATION KAFKA (Producer)
+// ============================================================
+const kafka = new Kafka({
+    clientId: 'user-service',
+    brokers: ['localhost:9092'], // Adresse du broker Kafka
+});
+
+const producer = kafka.producer();
+
+const initKafka = async () => {
+    try {
+        await producer.connect();
+        console.log('✅ Kafka Producer connecté');
+    } catch (error) {
+        console.error('❌ Erreur de connexion Kafka Producer:', error.message);
+    }
+};
+
+initKafka();
 
 // ---- Base de données simulée en mémoire ----
 let users = [
@@ -44,7 +61,7 @@ app.get('/users/:id', (req, res) => {
 
 // POST /users → ajoute un utilisateur
 // Body attendu : { "name": "...", "email": "..." }
-app.post('/users', (req, res) => {
+app.post('/users', async (req, res) => {
     const { name, email } = req.body;
 
     // Validation simple
@@ -62,6 +79,19 @@ app.post('/users', (req, res) => {
     };
 
     users.push(newUser);
+
+    // 📣 ÉVÉNEMENT KAFKA : On publie la création de l'utilisateur
+    try {
+        await producer.send({
+            topic: 'user-created',
+            messages: [
+                { value: JSON.stringify(newUser) },
+            ],
+        });
+        console.log(`📣 Événement 'user-created' envoyé pour : ${newUser.name}`);
+    } catch (error) {
+        console.error('❌ Impossible d\'envoyer l\'événement Kafka:', error.message);
+    }
 
     res.status(201).json({
         success: true,
