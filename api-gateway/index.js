@@ -91,6 +91,44 @@ app.post('/api/v1/products', async (req, res) => {
     }
 });
 
+// ============================================================
+// ROUTE – DASHBOARD  (communication entre les deux services)
+// Appelle user-service ET product-service en PARALLÈLE
+// et retourne les données combinées en une seule réponse.
+// ============================================================
+
+// GET /api/v1/dashboard → agrège users + products
+app.get('/api/v1/dashboard', async (req, res) => {
+    try {
+        // Promise.all lance les deux requêtes simultanément (plus rapide qu'en séquence)
+        const [usersResponse, productsResponse] = await Promise.all([
+            axios.get(`${USER_SERVICE_URL}/users`),
+            axios.get(`${PRODUCT_SERVICE_URL}/products`),
+        ]);
+
+        // On combine les deux réponses en un seul objet JSON
+        res.json({
+            success: true,
+            dashboard: {
+                users: {
+                    count: usersResponse.data.count,
+                    data: usersResponse.data.data,
+                },
+                products: {
+                    count: productsResponse.data.count,
+                    data: productsResponse.data.data,
+                },
+            },
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : un ou plusieurs services sont inaccessibles.',
+            detail: error.message,
+        });
+    }
+});
+
 // ---- Route racine : vérification rapide de l'état de la gateway ----
 app.get('/', (req, res) => {
     res.json({
@@ -98,6 +136,7 @@ app.get('/', (req, res) => {
         routes: {
             users: ['GET /api/v1/users', 'POST /api/v1/users'],
             products: ['GET /api/v1/products', 'POST /api/v1/products'],
+            dashboard: ['GET /api/v1/dashboard  ← communication inter-services'],
         },
     });
 });
