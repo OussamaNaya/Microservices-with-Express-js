@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "▶ user-service (3001)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/user-service/index.js",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "▶ product-service (3002)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/product-service/index.js",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "▶ order-service (3003)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/order-service/index.js",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "▶ api-gateway (3000)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/api-gateway/index.js",
+            "console": "integratedTerminal"
+        }
+    ]
+}
