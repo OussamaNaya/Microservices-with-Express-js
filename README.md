@@ -1,22 +1,27 @@
 # 🚀 Microservices Demo – Node.js + Express.js
 
-Architecture microservices pédagogique avec **3 services indépendants** qui communiquent via une API Gateway.
+Architecture microservices pédagogique avec **4 services indépendants** qui communiquent via une API Gateway.
 
 ---
 
 ## 📁 Structure du projet
 
 ```
-microservices-project/
-├── user-service/          ← Port 3001
-│   ├── package.json
-│   └── index.js
-├── product-service/       ← Port 3002
-│   ├── package.json
-│   └── index.js
-└── api-gateway/           ← Port 3000 (point d'entrée unique)
-    ├── package.json
-    └── index.js
+Microservices/
+├── api-gateway/           ← Port 3000 – point d'entrée unique
+│   ├── index.js
+│   └── package.json
+├── user-service/          ← Port 3001 – gestion des utilisateurs
+│   ├── index.js
+│   └── package.json
+├── product-service/       ← Port 3002 – gestion des produits
+│   ├── index.js
+│   └── package.json
+├── order-service/         ← Port 3003 – commandes (appelle user-service)
+│   ├── index.js
+│   └── package.json
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -34,6 +39,7 @@ Ou étape par étape :
 ```bash
 cd user-service    && npm install
 cd ../product-service && npm install
+cd ../order-service   && npm install
 cd ../api-gateway     && npm install
 ```
 
@@ -41,7 +47,7 @@ cd ../api-gateway     && npm install
 
 ## ▶️ Lancement
 
-> ⚠️ Ouvrir **3 terminaux séparés** et lancer chaque service.
+> ⚠️ Ouvrir **4 terminaux séparés** et lancer chaque service.
 
 **Terminal 1 – user-service**
 ```bash
@@ -57,7 +63,14 @@ node index.js
 # ✅ product-service démarré sur http://localhost:3002
 ```
 
-**Terminal 3 – api-gateway**
+**Terminal 3 – order-service**
+```bash
+cd order-service
+node index.js
+# ✅ order-service démarré sur http://localhost:3003
+```
+
+**Terminal 4 – api-gateway**
 ```bash
 cd api-gateway
 node index.js
@@ -134,6 +147,43 @@ Content-Type: application/json
   "name": "Écran 4K",
   "price": 450
 }
+```
+
+---
+
+### 🛒 Commandes — Communication inter-services (order-service → user-service)
+
+> `order-service` appelle **directement** `user-service` pour enrichir la réponse avec les infos de l'utilisateur.
+
+| Méthode | Endpoint | Description |
+|:-------:|----------|-------------|
+| `GET` | `/api/v1/orders` | Liste toutes les commandes |
+| `GET` | `/api/v1/orders/:id` | Commande enrichie avec les infos utilisateur |
+| `POST` | `/api/v1/orders` | Crée une nouvelle commande |
+
+**GET** `/api/v1/orders/101` — Réponse (order-service appelle user-service en interne) :
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": 101,
+    "product": "Laptop",
+    "quantity": 1,
+    "price": 1200,
+    "user": {
+      "id": 1,
+      "name": "Alice Dupont",
+      "email": "alice@mail.com"
+    }
+  }
+}
+```
+
+**POST** `/api/v1/orders`
+```bash
+curl -X POST http://localhost:3000/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId": 1, "product": "Écran 4K", "quantity": 1, "price": 450}'
 ```
 
 ---

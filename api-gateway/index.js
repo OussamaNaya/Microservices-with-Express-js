@@ -17,6 +17,8 @@ app.use(express.json());
 // ---- URLs des microservices ----
 const USER_SERVICE_URL = 'http://localhost:3001';
 const PRODUCT_SERVICE_URL = 'http://localhost:3002';
+const ORDER_SERVICE_URL = 'http://localhost:3003';
+
 
 // ============================================================
 // ROUTES – USERS  (proxy vers user-service)
@@ -129,14 +131,69 @@ app.get('/api/v1/dashboard', async (req, res) => {
     }
 });
 
+// ============================================================
+// ROUTES – ORDERS  (proxy vers order-service)
+// ============================================================
+
+// GET /api/v1/orders → liste toutes les commandes
+app.get('/api/v1/orders', async (req, res) => {
+    try {
+        const response = await axios.get(`${ORDER_SERVICE_URL}/orders`);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le order-service.',
+            detail: error.message,
+        });
+    }
+});
+
+// GET /api/v1/orders/:id → commande enrichie avec infos utilisateur
+// 🔑 order-service appelle lui-même user-service en interne
+app.get('/api/v1/orders/:id', async (req, res) => {
+    try {
+        const response = await axios.get(`${ORDER_SERVICE_URL}/orders/${req.params.id}`);
+        res.json(response.data);
+    } catch (error) {
+        if (error.response) {
+            return res.status(error.response.status).json(error.response.data);
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le order-service.',
+            detail: error.message,
+        });
+    }
+});
+
+// POST /api/v1/orders → crée une commande
+// Body attendu : { "userId": 1, "product": "...", "quantity": 1, "price": 99 }
+app.post('/api/v1/orders', async (req, res) => {
+    try {
+        const response = await axios.post(`${ORDER_SERVICE_URL}/orders`, req.body);
+        res.status(201).json(response.data);
+    } catch (error) {
+        if (error.response) {
+            return res.status(error.response.status).json(error.response.data);
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Erreur : impossible de joindre le order-service.',
+            detail: error.message,
+        });
+    }
+});
+
 // ---- Route racine : vérification rapide de l'état de la gateway ----
 app.get('/', (req, res) => {
     res.json({
         message: '🚪 API Gateway opérationnelle',
         routes: {
-            users: ['GET /api/v1/users', 'POST /api/v1/users'],
+            users: ['GET /api/v1/users', 'POST /api/v1/users', 'GET /api/v1/users/:id'],
             products: ['GET /api/v1/products', 'POST /api/v1/products'],
-            dashboard: ['GET /api/v1/dashboard  ← communication inter-services'],
+            orders: ['GET /api/v1/orders', 'GET /api/v1/orders/:id', 'POST /api/v1/orders'],
+            dashboard: ['GET /api/v1/dashboard  ← agrège users + products en parallèle'],
         },
     });
 });
@@ -147,4 +204,5 @@ app.listen(PORT, () => {
     console.log(`✅ api-gateway démarré sur http://localhost:${PORT}`);
     console.log(`   → /api/v1/users    proxie vers ${USER_SERVICE_URL}`);
     console.log(`   → /api/v1/products proxie vers ${PRODUCT_SERVICE_URL}`);
+    console.log(`   → /api/v1/orders   proxie vers ${ORDER_SERVICE_URL}`);
 });

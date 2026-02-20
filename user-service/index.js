@@ -26,6 +26,22 @@ app.get('/users', (req, res) => {
     });
 });
 
+// GET /users/:id → retourne UN utilisateur par son id
+// (utilisé par order-service pour enrichir les commandes)
+app.get('/users/:id', (req, res) => {
+    const user = users.find(u => u.id == req.params.id);
+
+    if (!user) {
+        return res.status(404).json({
+            success: false,
+            message: `Utilisateur #${req.params.id} introuvable.`,
+        });
+    }
+
+    res.status(200).json(user);
+});
+
+
 // POST /users → ajoute un utilisateur
 // Body attendu : { "name": "...", "email": "..." }
 app.post('/users', (req, res) => {
